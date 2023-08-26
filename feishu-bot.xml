@@ -12,7 +12,8 @@
                 "kind": "ConvertTimeZone",
                 "runAfter": {
                     "Initialize_variable_for_Alert_Target_ID": [
-                        "Succeeded"
+                        "Succeeded",
+                        "Failed"
                     ]
                 },
                 "type": "Expression"
@@ -34,201 +35,372 @@
                 },
                 "type": "InitializeVariable"
             },
-            "根据Alert_Signal_Type判断确认alertContext格式": {
+            "根据MonitoringService字段判断告警类型": {
                 "cases": {
-                    "Activity_Log_Alert": {
+                    "Cost_Alert": {
                         "actions": {
-                            "判断是否为服务级别或者资源级别Activity_Log": {
-                                "cases": {
-                                    "Service_Health_Alert": {
-                                        "actions": {
-                                            "For_each_(impactedservices)": {
-                                                "actions": {
-                                                    "HTTP推送到Feishu（Service告警）": {
-                                                        "inputs": {
-                                                            "body": {
-                                                                "content": {
-                                                                    "text": "Azure告警：\n  告警类型: 服务告警 \n  受影响的服务: @{items('For_each_(impactedservices)')?['ServiceName']}\n  受影响区域：@{items('For_each_(impactedservices)')?['ImpactedRegions']}\n  告警时间: @{body('Convert_time_zone')} \n  告警内容：@{triggerBody()?['data']?['essentials']?['description']}\n  参考信息: @{body('解析ServiceHealth告警AlertContext')?['properties']?['communication']}"
-                                                                },
-                                                                "msg_type": "text"
-                                                            },
-                                                            "headers": {
-                                                                "Content-Type": "application/json"
-                                                            },
-                                                            "method": "POST",
-                                                            "uri": "@variables('feishu-webhook-url')"
-                                                        },
-                                                        "type": "Http"
+                            "HTTP推送Cost告警到飞书": {
+                                "inputs": {
+                                    "body": {
+                                        "content": {
+                                            "text": "Azure告警：\n  告警类型: 成本开支 \n  预算使用范围: @{body('解析Cost_Alert的AlertContext')?['AlertData']?['Scope']}\n 预算上限 ：@{body('解析Cost_Alert的AlertContext')?['AlertData']?['BudgetThreshold']} \n  已使用: @{body('解析Cost_Alert的AlertContext')?['AlertData']?['SpentAmount']}\n 预算人员：@{body('解析Cost_Alert的AlertContext')?['AlertData']?['BudgetCreator']}\n  预算告警类型：@{body('解析Cost_Alert的AlertContext')?['AlertData']?['ThresholdType']}\n  告警时间: @{body('Convert_time_zone')}\n  本计费周期内预测消费总额: @{body('解析Cost_Alert的AlertContext')?['AlertData']?['ForecastedTotalForPeriod']} "
+                                        },
+                                        "msg_type": "text"
+                                    },
+                                    "headers": {
+                                        "Content-Type": "application/json"
+                                    },
+                                    "method": "POST",
+                                    "uri": "@variables('feishu-webhook-url')"
+                                },
+                                "runAfter": {
+                                    "解析Cost_Alert的AlertContext": [
+                                        "Succeeded",
+                                        "Failed"
+                                    ]
+                                },
+                                "type": "Http"
+                            },
+                            "Response_Cost_Alert": {
+                                "inputs": {
+                                    "body": "success",
+                                    "statusCode": 200
+                                },
+                                "kind": "Http",
+                                "runAfter": {
+                                    "HTTP推送Cost告警到飞书": [
+                                        "Succeeded",
+                                        "Failed",
+                                        "Skipped",
+                                        "TimedOut"
+                                    ]
+                                },
+                                "type": "Response"
+                            },
+                            "解析Cost_Alert的AlertContext": {
+                                "inputs": {
+                                    "content": "@triggerBody()?['data']?['alertContext']",
+                                    "schema": {
+                                        "properties": {
+                                            "AlertCategory": {
+                                                "type": "string"
+                                            },
+                                            "AlertData": {
+                                                "properties": {
+                                                    "BudgetCreator": {
+                                                        "type": "string"
+                                                    },
+                                                    "BudgetId": {
+                                                        "type": "string"
+                                                    },
+                                                    "BudgetName": {
+                                                        "type": "string"
+                                                    },
+                                                    "BudgetStartDate": {
+                                                        "type": "string"
+                                                    },
+                                                    "BudgetThreshold": {
+                                                        "type": "string"
+                                                    },
+                                                    "BudgetType": {
+                                                        "type": "string"
+                                                    },
+                                                    "ForecastedTotalForPeriod": {
+                                                        "type": "string"
+                                                    },
+                                                    "NotificationThresholdAmount": {
+                                                        "type": "string"
+                                                    },
+                                                    "Scope": {
+                                                        "type": "string"
+                                                    },
+                                                    "SpentAmount": {
+                                                        "type": "string"
+                                                    },
+                                                    "ThresholdType": {
+                                                        "type": "string"
+                                                    },
+                                                    "Unit": {
+                                                        "type": "string"
                                                     }
                                                 },
-                                                "foreach": "@outputs('解析ServiceHealth告警AlertContext')?['body']?['properties']?['impactedServices']",
-                                                "runAfter": {
-                                                    "解析ServiceHealth告警AlertContext": [
-                                                        "Succeeded",
-                                                        "Failed"
-                                                    ]
-                                                },
-                                                "type": "Foreach"
-                                            },
-                                            "Response_2": {
-                                                "inputs": {
-                                                    "body": "success",
-                                                    "statusCode": 200
-                                                },
-                                                "kind": "Http",
-                                                "runAfter": {
-                                                    "For_each_(impactedservices)": [
-                                                        "Succeeded",
-                                                        "TimedOut",
-                                                        "Skipped",
-                                                        "Failed"
-                                                    ]
-                                                },
-                                                "type": "Response"
-                                            },
-                                            "解析ServiceHealth告警AlertContext": {
-                                                "inputs": {
-                                                    "content": "@triggerBody()?['data']?['alertContext']",
-                                                    "schema": {
-                                                        "properties": {
-                                                            "ResourceType": {},
-                                                            "authorization": {},
-                                                            "caller": {},
-                                                            "channels": {
-                                                                "type": "integer"
-                                                            },
-                                                            "claims": {},
-                                                            "correlationId": {
-                                                                "type": "string"
-                                                            },
-                                                            "eventDataId": {
-                                                                "type": "string"
-                                                            },
-                                                            "eventSource": {
-                                                                "type": "integer"
-                                                            },
-                                                            "eventTimestamp": {
-                                                                "type": "string"
-                                                            },
-                                                            "httpRequest": {},
-                                                            "level": {
-                                                                "type": "integer"
-                                                            },
-                                                            "operationId": {
-                                                                "type": "string"
-                                                            },
-                                                            "operationName": {
-                                                                "type": "string"
-                                                            },
-                                                            "properties": {
-                                                                "properties": {
-                                                                    "IsSynthetic": {
-                                                                        "type": "string"
-                                                                    },
-                                                                    "communication": {
-                                                                        "type": "string"
-                                                                    },
-                                                                    "communicationId": {
-                                                                        "type": "string"
-                                                                    },
-                                                                    "defaultLanguageContent": {
-                                                                        "type": "string"
-                                                                    },
-                                                                    "defaultLanguageTitle": {
-                                                                        "type": "string"
-                                                                    },
-                                                                    "impactMitigationTime": {
-                                                                        "type": "string"
-                                                                    },
-                                                                    "impactStartTime": {
-                                                                        "type": "string"
-                                                                    },
-                                                                    "impactType": {
-                                                                        "type": "string"
-                                                                    },
-                                                                    "impactedServices": {
-                                                                        "items": {
-                                                                            "properties": {
-                                                                                "ImpactedRegions": {
-                                                                                    "items": {
-                                                                                        "properties": {
-                                                                                            "RegionName": {
-                                                                                                "type": "string"
-                                                                                            }
-                                                                                        },
-                                                                                        "required": [
-                                                                                            "RegionName"
-                                                                                        ],
-                                                                                        "type": "object"
-                                                                                    },
-                                                                                    "type": "array"
-                                                                                },
-                                                                                "ServiceName": {
-                                                                                    "type": "string"
-                                                                                }
-                                                                            },
-                                                                            "required": [
-                                                                                "ImpactedRegions",
-                                                                                "ServiceName"
-                                                                            ],
-                                                                            "type": "object"
-                                                                        },
-                                                                        "type": "array"
-                                                                    },
-                                                                    "impactedServicesTableRows": {
-                                                                        "type": "string"
-                                                                    },
-                                                                    "incidentType": {
-                                                                        "type": "string"
-                                                                    },
-                                                                    "isHIR": {
-                                                                        "type": "string"
-                                                                    },
-                                                                    "region": {
-                                                                        "type": "string"
-                                                                    },
-                                                                    "service": {
-                                                                        "type": "string"
-                                                                    },
-                                                                    "stage": {
-                                                                        "type": "string"
-                                                                    },
-                                                                    "title": {
-                                                                        "type": "string"
-                                                                    },
-                                                                    "trackingId": {
-                                                                        "type": "string"
-                                                                    },
-                                                                    "version": {
-                                                                        "type": "string"
-                                                                    }
-                                                                },
-                                                                "type": "object"
-                                                            },
-                                                            "status": {
-                                                                "type": "string"
-                                                            },
-                                                            "subStatus": {},
-                                                            "submissionTimestamp": {
-                                                                "type": "string"
-                                                            }
-                                                        },
-                                                        "type": "object"
-                                                    }
-                                                },
-                                                "type": "ParseJson"
+                                                "type": "object"
                                             }
                                         },
-                                        "case": "ServiceHealth"
+                                        "type": "object"
                                     }
                                 },
-                                "default": {
+                                "type": "ParseJson"
+                            }
+                        },
+                        "case": "CostAlerts"
+                    },
+                    "Service_Health": {
+                        "actions": {
+                            "For_each_(impactedservices)": {
+                                "actions": {
+                                    "HTTP推送到Feishu（Service告警）": {
+                                        "inputs": {
+                                            "body": {
+                                                "content": {
+                                                    "text": "Azure告警：\n  告警类型: 服务告警 \n  受影响的服务: @{items('For_each_(impactedservices)')?['ServiceName']}\n  受影响区域：@{items('For_each_(impactedservices)')?['ImpactedRegions']}\n  告警时间: @{body('Convert_time_zone')} \n  告警内容：@{triggerBody()?['data']?['essentials']?['description']}\n  参考信息: @{body('解析ServiceHealth告警AlertContext')?['properties']?['communication']}"
+                                                },
+                                                "msg_type": "text"
+                                            },
+                                            "headers": {
+                                                "Content-Type": "application/json"
+                                            },
+                                            "method": "POST",
+                                            "uri": "@variables('feishu-webhook-url')"
+                                        },
+                                        "type": "Http"
+                                    }
+                                },
+                                "foreach": "@outputs('解析ServiceHealth告警AlertContext')?['body']?['properties']?['impactedServices']",
+                                "runAfter": {
+                                    "解析ServiceHealth告警AlertContext": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "Foreach"
+                            },
+                            "Response_Service_Health_Alert": {
+                                "inputs": {
+                                    "body": "success",
+                                    "statusCode": 200
+                                },
+                                "kind": "Http",
+                                "runAfter": {
+                                    "For_each_(impactedservices)": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "Response"
+                            },
+                            "解析ServiceHealth告警AlertContext": {
+                                "inputs": {
+                                    "content": "@triggerBody()?['data']?['alertContext']",
+                                    "schema": {
+                                        "properties": {
+                                            "ResourceType": {},
+                                            "authorization": {},
+                                            "caller": {},
+                                            "channels": {
+                                                "type": "integer"
+                                            },
+                                            "claims": {},
+                                            "correlationId": {
+                                                "type": "string"
+                                            },
+                                            "eventDataId": {
+                                                "type": "string"
+                                            },
+                                            "eventSource": {
+                                                "type": "integer"
+                                            },
+                                            "eventTimestamp": {
+                                                "type": "string"
+                                            },
+                                            "httpRequest": {},
+                                            "level": {
+                                                "type": "integer"
+                                            },
+                                            "operationId": {
+                                                "type": "string"
+                                            },
+                                            "operationName": {
+                                                "type": "string"
+                                            },
+                                            "properties": {
+                                                "properties": {
+                                                    "IsSynthetic": {
+                                                        "type": "string"
+                                                    },
+                                                    "communication": {
+                                                        "type": "string"
+                                                    },
+                                                    "communicationId": {
+                                                        "type": "string"
+                                                    },
+                                                    "defaultLanguageContent": {
+                                                        "type": "string"
+                                                    },
+                                                    "defaultLanguageTitle": {
+                                                        "type": "string"
+                                                    },
+                                                    "impactMitigationTime": {
+                                                        "type": "string"
+                                                    },
+                                                    "impactStartTime": {
+                                                        "type": "string"
+                                                    },
+                                                    "impactType": {
+                                                        "type": "string"
+                                                    },
+                                                    "impactedServices": {
+                                                        "items": {
+                                                            "properties": {
+                                                                "ImpactedRegions": {
+                                                                    "items": {
+                                                                        "properties": {
+                                                                            "RegionName": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "required": [
+                                                                            "RegionName"
+                                                                        ],
+                                                                        "type": "object"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "ServiceName": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "required": [
+                                                                "ImpactedRegions",
+                                                                "ServiceName"
+                                                            ],
+                                                            "type": "object"
+                                                        },
+                                                        "type": "array"
+                                                    },
+                                                    "impactedServicesTableRows": {
+                                                        "type": "string"
+                                                    },
+                                                    "incidentType": {
+                                                        "type": "string"
+                                                    },
+                                                    "isHIR": {
+                                                        "type": "string"
+                                                    },
+                                                    "region": {
+                                                        "type": "string"
+                                                    },
+                                                    "service": {
+                                                        "type": "string"
+                                                    },
+                                                    "stage": {
+                                                        "type": "string"
+                                                    },
+                                                    "title": {
+                                                        "type": "string"
+                                                    },
+                                                    "trackingId": {
+                                                        "type": "string"
+                                                    },
+                                                    "version": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            },
+                                            "status": {
+                                                "type": "string"
+                                            },
+                                            "subStatus": {},
+                                            "submissionTimestamp": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                },
+                                "type": "ParseJson"
+                            }
+                        },
+                        "case": "ServiceHealth"
+                    },
+                    "SmartDetector告警": {
+                        "actions": {
+                            "HTTP_飞书通知-Smart告警": {
+                                "inputs": {
+                                    "body": {
+                                        "content": {
+                                            "text": "Azure告警：\n  告警类型：智能告警\n  订阅:@{variables('AffectedResource')[2]}\n  资源组:  @{variables('AffectedResource')[4]}\n  资源类型： @{variables('AffectedResource')[6]} \n  资源名称：@{concat(variables('AffectedResource')[7], '/', variables('AffectedResource')[8])} \n  告警时间:  @{body('Convert_time_zone')}\n  告警内容：@{body('Parse_JSON-SmartDector告警')?['DetectionSummary']}\n  异常值: @{body('Parse_JSON-SmartDector告警')?['DetectedValue']}\n  正常值：@{body('Parse_JSON-SmartDector告警')?['NormalValue']}"
+                                        },
+                                        "msg_type": "text"
+                                    },
+                                    "headers": {
+                                        "Content-Type": "application/json"
+                                    },
+                                    "method": "POST",
+                                    "uri": "@variables('feishu-webhook-url')"
+                                },
+                                "runAfter": {
+                                    "Parse_JSON-SmartDector告警": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "Http"
+                            },
+                            "Parse_JSON-SmartDector告警": {
+                                "inputs": {
+                                    "content": "@triggerBody()?['data']?['alertContext']",
+                                    "schema": {
+                                        "properties": {
+                                            "AnalysisTimestamp": {
+                                                "type": "string"
+                                            },
+                                            "DetectedValue": {
+                                                "type": "string"
+                                            },
+                                            "DetectionSummary": {
+                                                "type": "string"
+                                            },
+                                            "FormattedOccurrenceTime": {
+                                                "type": "string"
+                                            },
+                                            "NormalValue": {
+                                                "type": "string"
+                                            },
+                                            "PresentationInsightEventRequest": {
+                                                "type": "string"
+                                            },
+                                            "SmartDetectorId": {
+                                                "type": "string"
+                                            },
+                                            "SmartDetectorName": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                },
+                                "type": "ParseJson"
+                            },
+                            "Response_smart_alert": {
+                                "inputs": {
+                                    "body": "success",
+                                    "statusCode": 200
+                                },
+                                "kind": "Http",
+                                "runAfter": {
+                                    "HTTP_飞书通知-Smart告警": [
+                                        "Succeeded",
+                                        "TimedOut",
+                                        "Skipped",
+                                        "Failed"
+                                    ]
+                                },
+                                "type": "Response"
+                            }
+                        },
+                        "case": "SmartDetector"
+                    }
+                },
+                "default": {
+                    "actions": {
+                        "根据Alert_Signal_Type判断确认alertContext格式": {
+                            "cases": {
+                                "Activity_Log_Alert": {
                                     "actions": {
                                         "HTTP推送到飞书(Activity_Log)": {
                                             "inputs": {
                                                 "body": {
                                                     "content": {
-                                                        "text": "Azure告警：\n  告警类型: 操作日志 \n  订阅:@{variables('AffectedResource')[2]}\n  资源组:  @{variables('AffectedResource')[4]}\n  资源类型： @{variables('AffectedResource')[6]} \n  资源名称：@{concat(variables('AffectedResource')[7], '/', variables('AffectedResource')[8])} \n  告警时间: @{body('Convert_time_zone')} \n  告警内容：@{triggerBody()?['data']?['essentials']?['description']}\n  参考信息: @{body('解析Resource_Health_告警AlertContext')?['properties']?['title']}"
+                                                        "text": "Azure告警：\n  告警类型: 操作日志 \n  订阅:@{variables('AffectedResource')[2]}\n  资源组:  @{variables('AffectedResource')[4]}\n  资源类型： @{variables('AffectedResource')[6]} \n  资源名称：@{concat(variables('AffectedResource')[7], '/', variables('AffectedResource')[8])} \n  告警时间: @{body('Convert_time_zone')} \n  告警内容：@{triggerBody()?['data']?['essentials']?['description']}\n  参考信息: @{body('解析Resource_Health_告警AlertContext')?['properties']?['title']}@{body('解析Resource_Health_告警AlertContext')?['operationName']}"
                                                     },
                                                     "msg_type": "text"
                                                 },
@@ -240,13 +412,12 @@
                                             },
                                             "runAfter": {
                                                 "解析Resource_Health_告警AlertContext": [
-                                                    "Succeeded",
-                                                    "Failed"
+                                                    "Succeeded"
                                                 ]
                                             },
                                             "type": "Http"
                                         },
-                                        "Response_1": {
+                                        "Response_Activity_Log": {
                                             "inputs": {
                                                 "body": "success",
                                                 "statusCode": 200
@@ -254,10 +425,7 @@
                                             "kind": "Http",
                                             "runAfter": {
                                                 "HTTP推送到飞书(Activity_Log)": [
-                                                    "Succeeded",
-                                                    "Failed",
-                                                    "TimedOut",
-                                                    "Skipped"
+                                                    "Succeeded"
                                                 ]
                                             },
                                             "type": "Response"
@@ -325,302 +493,328 @@
                                             },
                                             "type": "ParseJson"
                                         }
-                                    }
+                                    },
+                                    "case": "Activity Log"
                                 },
-                                "expression": "@triggerBody()?['data']?['essentials']?['monitoringService']",
-                                "type": "Switch"
-                            }
-                        },
-                        "case": "Activity Log"
-                    },
-                    "Log_Alert": {
-                        "actions": {
-                            "Parse_JSON_AlertContext_Log_V2": {
-                                "inputs": {
-                                    "content": "@triggerBody()?['data']?['alertContext']",
-                                    "schema": {
-                                        "properties": {
-                                            "condition": {
-                                                "properties": {
-                                                    "allOf": {
-                                                        "items": {
+                                "Log_Alert_v2": {
+                                    "actions": {
+                                        "HTTP推送到飞书-Logv2": {
+                                            "inputs": {
+                                                "body": {
+                                                    "content": {
+                                                        "text": "Azure告警：\n  告警类型: 日志告警v2 \n  订阅:@{variables('AffectedResource')[2]}\n  资源组:  @{variables('AffectedResource')[4]}\n  资源类型： @{variables('AffectedResource')[6]} \n  资源名称：@{concat(variables('AffectedResource')[7], '/', variables('AffectedResource')[8])} \n  告警时间:  @{body('Convert_time_zone')}\n  告警内容：@{triggerBody()?['data']?['essentials']?['description']}\n  参考信息: "
+                                                    },
+                                                    "msg_type": "text"
+                                                },
+                                                "headers": {
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "method": "POST",
+                                                "uri": "@variables('feishu-webhook-url')"
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON_AlertContext_Log_V2": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http"
+                                        },
+                                        "Parse_JSON_AlertContext_Log_V2": {
+                                            "inputs": {
+                                                "content": "@triggerBody()?['data']?['alertContext']",
+                                                "schema": {
+                                                    "properties": {
+                                                        "condition": {
                                                             "properties": {
-                                                                "dimensions": {
+                                                                "allOf": {
                                                                     "items": {
                                                                         "properties": {
-                                                                            "name": {
+                                                                            "dimensions": {
+                                                                                "items": {
+                                                                                    "properties": {
+                                                                                        "name": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "value": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "required": [
+                                                                                        "name",
+                                                                                        "value"
+                                                                                    ],
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "type": "array"
+                                                                            },
+                                                                            "failingPeriods": {
+                                                                                "properties": {
+                                                                                    "minFailingPeriodsToAlert": {
+                                                                                        "type": "integer"
+                                                                                    },
+                                                                                    "numberOfEvaluationPeriods": {
+                                                                                        "type": "integer"
+                                                                                    }
+                                                                                },
+                                                                                "type": "object"
+                                                                            },
+                                                                            "linkToFilteredSearchResultsAPI": {
                                                                                 "type": "string"
                                                                             },
-                                                                            "value": {
+                                                                            "linkToFilteredSearchResultsUI": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "linkToSearchResultsAPI": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "linkToSearchResultsUI": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "metricMeasureColumn": {},
+                                                                            "metricValue": {
+                                                                                "type": "integer"
+                                                                            },
+                                                                            "operator": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "searchQuery": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "targetResourceTypes": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "threshold": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "timeAggregation": {
                                                                                 "type": "string"
                                                                             }
                                                                         },
                                                                         "required": [
-                                                                            "name",
-                                                                            "value"
+                                                                            "searchQuery",
+                                                                            "metricMeasureColumn",
+                                                                            "targetResourceTypes",
+                                                                            "operator",
+                                                                            "threshold",
+                                                                            "timeAggregation",
+                                                                            "dimensions",
+                                                                            "metricValue",
+                                                                            "failingPeriods",
+                                                                            "linkToSearchResultsUI",
+                                                                            "linkToFilteredSearchResultsUI",
+                                                                            "linkToSearchResultsAPI",
+                                                                            "linkToFilteredSearchResultsAPI"
                                                                         ],
                                                                         "type": "object"
                                                                     },
                                                                     "type": "array"
                                                                 },
-                                                                "failingPeriods": {
-                                                                    "properties": {
-                                                                        "minFailingPeriodsToAlert": {
-                                                                            "type": "integer"
-                                                                        },
-                                                                        "numberOfEvaluationPeriods": {
-                                                                            "type": "integer"
-                                                                        }
-                                                                    },
-                                                                    "type": "object"
-                                                                },
-                                                                "linkToFilteredSearchResultsAPI": {
+                                                                "windowEndTime": {
                                                                     "type": "string"
                                                                 },
-                                                                "linkToFilteredSearchResultsUI": {
+                                                                "windowSize": {
                                                                     "type": "string"
                                                                 },
-                                                                "linkToSearchResultsAPI": {
-                                                                    "type": "string"
-                                                                },
-                                                                "linkToSearchResultsUI": {
-                                                                    "type": "string"
-                                                                },
-                                                                "metricMeasureColumn": {},
-                                                                "metricValue": {
-                                                                    "type": "integer"
-                                                                },
-                                                                "operator": {
-                                                                    "type": "string"
-                                                                },
-                                                                "searchQuery": {
-                                                                    "type": "string"
-                                                                },
-                                                                "targetResourceTypes": {
-                                                                    "type": "string"
-                                                                },
-                                                                "threshold": {
-                                                                    "type": "string"
-                                                                },
-                                                                "timeAggregation": {
+                                                                "windowStartTime": {
                                                                     "type": "string"
                                                                 }
                                                             },
-                                                            "required": [
-                                                                "searchQuery",
-                                                                "metricMeasureColumn",
-                                                                "targetResourceTypes",
-                                                                "operator",
-                                                                "threshold",
-                                                                "timeAggregation",
-                                                                "dimensions",
-                                                                "metricValue",
-                                                                "failingPeriods",
-                                                                "linkToSearchResultsUI",
-                                                                "linkToFilteredSearchResultsUI",
-                                                                "linkToSearchResultsAPI",
-                                                                "linkToFilteredSearchResultsAPI"
-                                                            ],
                                                             "type": "object"
                                                         },
-                                                        "type": "array"
-                                                    },
-                                                    "windowEndTime": {
-                                                        "type": "string"
-                                                    },
-                                                    "windowSize": {
-                                                        "type": "string"
-                                                    },
-                                                    "windowStartTime": {
-                                                        "type": "string"
-                                                    }
-                                                },
-                                                "type": "object"
-                                            },
-                                            "conditionType": {
-                                                "type": "string"
-                                            },
-                                            "properties": {
-                                                "properties": {
-                                                    "customKey1": {
-                                                        "type": "string"
-                                                    },
-                                                    "customKey2": {
-                                                        "type": "string"
-                                                    }
-                                                },
-                                                "type": "object"
-                                            }
-                                        },
-                                        "type": "object"
-                                    }
-                                },
-                                "type": "ParseJson"
-                            }
-                        },
-                        "case": "Log"
-                    },
-                    "Metics_Alert": {
-                        "actions": {
-                            "For_each": {
-                                "actions": {
-                                    "HTTP推送到飞书（指标告警）": {
-                                        "inputs": {
-                                            "body": {
-                                                "content": {
-                                                    "text": "Azure告警：\n  告警类型：性能指标 \n  订阅:@{variables('AffectedResource')[2]}\n  资源组:  @{variables('AffectedResource')[4]}\n  资源类型： @{variables('AffectedResource')[6]} \n  资源名称：@{concat(variables('AffectedResource')[7], '/', variables('AffectedResource')[8])} \n  告警时间: @{body('Convert_time_zone')} \n  告警内容：@{triggerBody()?['data']?['essentials']?['description']}\n  参考信息: @{items('For_each')?['metricName']} @{items('For_each')?['operator']} @{items('For_each')?['metricValue']}"
-                                                },
-                                                "msg_type": "text"
-                                            },
-                                            "headers": {
-                                                "Content-Type": "application/json"
-                                            },
-                                            "method": "POST",
-                                            "uri": "@variables('feishu-webhook-url')"
-                                        },
-                                        "limit": {
-                                            "timeout": "PT5S"
-                                        },
-                                        "operationOptions": "DisableAsyncPattern",
-                                        "type": "Http"
-                                    }
-                                },
-                                "foreach": "@outputs('Parse_JSON_AlertContext_Metrics')?['body']?['condition']?['allOf']",
-                                "runAfter": {
-                                    "Parse_JSON_AlertContext_Metrics": [
-                                        "Succeeded",
-                                        "Failed"
-                                    ]
-                                },
-                                "type": "Foreach"
-                            },
-                            "Parse_JSON_AlertContext_Metrics": {
-                                "inputs": {
-                                    "content": "@triggerBody()?['data']?['alertContext']",
-                                    "schema": {
-                                        "properties": {
-                                            "condition": {
-                                                "properties": {
-                                                    "allOf": {
-                                                        "items": {
+                                                        "conditionType": {
+                                                            "type": "string"
+                                                        },
+                                                        "properties": {
                                                             "properties": {
-                                                                "dimensions": {
+                                                                "customKey1": {
+                                                                    "type": "string"
+                                                                },
+                                                                "customKey2": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "ParseJson"
+                                        },
+                                        "Response_logv2": {
+                                            "inputs": {
+                                                "body": "success",
+                                                "statusCode": 200
+                                            },
+                                            "kind": "Http",
+                                            "runAfter": {
+                                                "HTTP推送到飞书-Logv2": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Response"
+                                        }
+                                    },
+                                    "case": "Log"
+                                },
+                                "Metics_Alert": {
+                                    "actions": {
+                                        "For_each": {
+                                            "actions": {
+                                                "HTTP推送到飞书（指标告警）": {
+                                                    "inputs": {
+                                                        "body": {
+                                                            "content": {
+                                                                "text": "Azure告警：\n  告警类型：性能指标 \n  订阅:@{variables('AffectedResource')[2]}\n  资源组:  @{variables('AffectedResource')[4]}\n  资源类型： @{variables('AffectedResource')[6]} \n  资源名称：@{concat(variables('AffectedResource')[7], '/', variables('AffectedResource')[8])} \n  告警时间: @{body('Convert_time_zone')} \n  告警内容：@{triggerBody()?['data']?['essentials']?['description']}\n  参考信息: @{items('For_each')?['metricName']} @{items('For_each')?['operator']} @{items('For_each')?['metricValue']}"
+                                                            },
+                                                            "msg_type": "text"
+                                                        },
+                                                        "headers": {
+                                                            "Content-Type": "application/json"
+                                                        },
+                                                        "method": "POST",
+                                                        "uri": "@variables('feishu-webhook-url')"
+                                                    },
+                                                    "limit": {
+                                                        "timeout": "PT5S"
+                                                    },
+                                                    "operationOptions": "DisableAsyncPattern",
+                                                    "type": "Http"
+                                                }
+                                            },
+                                            "foreach": "@outputs('Parse_JSON_AlertContext_Metrics')?['body']?['condition']?['allOf']",
+                                            "runAfter": {
+                                                "Parse_JSON_AlertContext_Metrics": [
+                                                    "Succeeded",
+                                                    "Failed"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "Parse_JSON_AlertContext_Metrics": {
+                                            "inputs": {
+                                                "content": "@triggerBody()?['data']?['alertContext']",
+                                                "schema": {
+                                                    "properties": {
+                                                        "condition": {
+                                                            "properties": {
+                                                                "allOf": {
                                                                     "items": {
                                                                         "properties": {
-                                                                            "name": {
+                                                                            "dimensions": {
+                                                                                "items": {
+                                                                                    "properties": {
+                                                                                        "name": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "value": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "required": [
+                                                                                        "name",
+                                                                                        "value"
+                                                                                    ],
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "type": "array"
+                                                                            },
+                                                                            "metricName": {
                                                                                 "type": "string"
                                                                             },
-                                                                            "value": {
+                                                                            "metricNamespace": {
+                                                                                "type": [
+                                                                                    "string",
+                                                                                    "null"
+                                                                                ]
+                                                                            },
+                                                                            "metricValue": {
+                                                                                "type": "number"
+                                                                            },
+                                                                            "operator": {
                                                                                 "type": "string"
-                                                                            }
+                                                                            },
+                                                                            "threshold": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "timeAggregation": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "webTestName": {}
                                                                         },
                                                                         "required": [
-                                                                            "name",
-                                                                            "value"
+                                                                            "metricName",
+                                                                            "metricNamespace",
+                                                                            "operator",
+                                                                            "threshold",
+                                                                            "timeAggregation",
+                                                                            "dimensions",
+                                                                            "metricValue",
+                                                                            "webTestName"
                                                                         ],
                                                                         "type": "object"
                                                                     },
                                                                     "type": "array"
                                                                 },
-                                                                "metricName": {
+                                                                "windowEndTime": {
                                                                     "type": "string"
                                                                 },
-                                                                "metricNamespace": {
+                                                                "windowSize": {
                                                                     "type": "string"
                                                                 },
-                                                                "metricValue": {
-                                                                    "type": "number"
-                                                                },
-                                                                "operator": {
+                                                                "windowStartTime": {
                                                                     "type": "string"
-                                                                },
-                                                                "threshold": {
-                                                                    "type": "string"
-                                                                },
-                                                                "timeAggregation": {
-                                                                    "type": "string"
-                                                                },
-                                                                "webTestName": {}
+                                                                }
                                                             },
-                                                            "required": [
-                                                                "metricName",
-                                                                "metricNamespace",
-                                                                "operator",
-                                                                "threshold",
-                                                                "timeAggregation",
-                                                                "dimensions",
-                                                                "metricValue",
-                                                                "webTestName"
-                                                            ],
                                                             "type": "object"
                                                         },
-                                                        "type": "array"
+                                                        "conditionType": {
+                                                            "type": "string"
+                                                        }
                                                     },
-                                                    "windowEndTime": {
-                                                        "type": "string"
-                                                    },
-                                                    "windowSize": {
-                                                        "type": "string"
-                                                    },
-                                                    "windowStartTime": {
-                                                        "type": "string"
-                                                    }
-                                                },
-                                                "type": "object"
+                                                    "type": "object"
+                                                }
                                             },
-                                            "conditionType": {
-                                                "type": "string"
-                                            },
-                                            "properties": {
-                                                "properties": {
-                                                    "customKey1": {
-                                                        "type": "string"
-                                                    },
-                                                    "customKey2": {
-                                                        "type": "string"
-                                                    }
-                                                },
-                                                "type": "object"
-                                            }
+                                            "type": "ParseJson"
                                         },
-                                        "type": "object"
+                                        "Response_Metrics": {
+                                            "inputs": {
+                                                "body": "success",
+                                                "statusCode": 200
+                                            },
+                                            "kind": "Http",
+                                            "runAfter": {
+                                                "For_each": [
+                                                    "Succeeded",
+                                                    "TimedOut",
+                                                    "Skipped",
+                                                    "Failed"
+                                                ]
+                                            },
+                                            "type": "Response"
+                                        }
+                                    },
+                                    "case": "Metric"
+                                }
+                            },
+                            "default": {
+                                "actions": {
+                                    "Default_Response": {
+                                        "inputs": {
+                                            "body": "default",
+                                            "statusCode": 200
+                                        },
+                                        "kind": "Http",
+                                        "type": "Response"
                                     }
-                                },
-                                "type": "ParseJson"
+                                }
                             },
-                            "Response": {
-                                "inputs": {
-                                    "body": "success",
-                                    "statusCode": 200
-                                },
-                                "kind": "Http",
-                                "runAfter": {
-                                    "For_each": [
-                                        "Succeeded",
-                                        "TimedOut",
-                                        "Skipped",
-                                        "Failed"
-                                    ]
-                                },
-                                "type": "Response"
-                            }
-                        },
-                        "case": "Metric"
-                    }
-                },
-                "default": {
-                    "actions": {
-                        "Response_3": {
-                            "inputs": {
-                                "body": "default",
-                                "statusCode": 200
-                            },
-                            "kind": "Http",
-                            "type": "Response"
+                            "expression": "@triggerBody()?['data']?['essentials']?['signalType']",
+                            "type": "Switch"
                         }
                     }
                 },
-                "expression": "@triggerBody()?['data']?['essentials']?['signalType']",
+                "expression": "@triggerBody()?['data']?['essentials']?['monitoringService']",
                 "runAfter": {
                     "Convert_time_zone": [
                         "Succeeded"
@@ -634,7 +828,7 @@
                         {
                             "name": "feishu-webhook-url",
                             "type": "string",
-                            "value": "https://open.feishu.cn/open-apis/bot/v2/hook/{your-bot-uuid}"
+                            "value": "https://open.feishu.cn/open-apis/bot/v2/hook/{your own uuid}"
                         }
                     ]
                 },
